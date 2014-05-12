@@ -1,0 +1,8 @@
+# Ignore common runtime files.
+*.dat
+*.err
+*.out
+*.tmp
+
+# Ignore Python byte code files.
+*.pyc
