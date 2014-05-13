@@ -1,8 +1,24 @@
 import collections
 
 
-def get_stats(graph, max_depth, root):
-    """Counts nodes at given depth."""
+def count_nodes(graph, root, max_depth):
+    """Counts nodes at given depth.
+
+    Parameters
+    ----------
+    graph : Networkx DiGraph
+        A graph on which counting is done.
+    root : a graph node
+        A seed node for which counting is done.
+    max_depth : integer
+        Maximal depth for which counting is performed.
+
+    Returns
+    -------
+    count : dictionary
+        A dictionary which keys represents depths and values number of nodes at
+        that depth.
+    """
 
     # Usually we measure depth in synthetic steps (no. of reactions
     # separating two chemicals, but here we want to mean it what it usually
