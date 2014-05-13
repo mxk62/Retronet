@@ -7,7 +7,7 @@ import re
 from rdkit import Chem
 from rdkit.Chem import MCS
 from rdkit.Chem import SanitizeFlags
-import mapper as mp
+import retronet as rn
 
 
 class Pattern:
@@ -28,7 +28,7 @@ class Pattern:
 
         Examples
         --------
-        >>> p = mp.Pattern('[C:1][O:2]')
+        >>> p = rn.Pattern('[C:1][O:2]')
 
         Pattern can be also view as an *objects* (molecular fragments), thus
 
@@ -84,8 +84,8 @@ class Pattern:
         Conversely, it does not contain ``[S:2]`` as it is not a substructure
         of ``[C:1][O:2]``.
 
-        >>> patt = mp.Pattern('[C:1][O:2]')
-        >>> other = mp.Pattern('[S:2]')
+        >>> patt = rn.Pattern('[C:1][O:2]')
+        >>> other = rn.Pattern('[S:2]')
         >>> patt.does_contain(other)
         False
 
@@ -99,15 +99,15 @@ class Pattern:
 
         Thus
 
-        >>> patt = mp.Pattern('[C:4]O.[N:3][C:1]=[O:2]')
-        >>> other = mp.Core('[N:3].[C:2]O')
+        >>> patt = rn.Pattern('[C:4]O.[N:3][C:1]=[O:2]')
+        >>> other = rn.Core('[N:3].[C:2]O')
         >>> patt.does_contain(other)
         True
 
         but
 
-        >>> patt = mp.Core('[C:4]O.[N:3][C:1]=[O:2]')
-        >>> other = mp.Core('[C:1]=O')
+        >>> patt = rn.Core('[C:4]O.[N:3][C:1]=[O:2]')
+        >>> other = rn.Core('[C:1]=O')
         >>> patt.does_contain(other)
         False
         """
