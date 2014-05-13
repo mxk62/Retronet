@@ -34,6 +34,7 @@ def create_depgraph(patterns):
                         if patt.does_contain(other) \
                         else (patt.smiles, other.smiles)
                     g.add_edge(*edge, weight=d)
+        g.node[patt.smiles]['duplicates'] = tuple(duplicates)
         for patt in duplicates:
             patterns.remove(patt)
             if patt.smiles in g.nodes():
