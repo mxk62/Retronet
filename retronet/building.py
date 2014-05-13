@@ -1,6 +1,6 @@
 import collections
 import itertools
-import networkx as nx
+import networkx
 import retronet as rn
 
 
@@ -22,7 +22,7 @@ def populate(smiles, transforms, depth=2):
     g : Networkx DiGraph
         A directed, biparite graph representing the chemical network.
     """
-    graph = nx.DiGraph()
+    graph = networkx.DiGraph()
 
     rxn_count = itertools.count()
 
@@ -48,9 +48,7 @@ def populate(smiles, transforms, depth=2):
         # Find out valid retrosynthetic reactions using the available
         # transforms.
         chem = rn.Chemical(chem_smi)
-        reactant_sets = set()
-        for t in transforms:
-            reactant_sets.update(chem.make_retrostep(t))
+        reactant_sets = apply(chem, transforms)
 
         # Add reaction associated with each reactant set and enqueue chemicals
         # from product sets.
@@ -63,6 +61,43 @@ def populate(smiles, transforms, depth=2):
         processed.add(chem_smi)
 
     return graph
+
+
+def apply(chem, transforms):
+    """Applies available transforms to a given chemical.
+
+    Parameters
+    ----------
+    chem : Chemical
+        A representation of a given chemical compound.
+    transforms : Networkx DiGraph
+        A 'dependency' graph of transforms.
+
+    Returns
+    -------
+    reactants : set
+        A set of reactant sets obtained after applying all compatible
+        transforms.
+    """
+    reactant_sets = set()
+
+    processed = set()
+    queue = collections.deque([t for t in transforms.nodes_iter()
+                               if len(transforms.predecessors(t)) == 0])
+    while queue:
+        patt = queue.popleft()
+
+        for t in transforms.nodes[patt]['transforms']:
+            current_sets = chem.make_retrostep(t)
+            if not current_sets:
+                processed.add(patt)
+                break
+            reactant_sets.update(current_sets)
+
+        if patt not in processed:
+            queue.extend([v for v in transforms.successors(patt)])
+            processed.add(patt)
+    return reactant_sets
 
 
 def recreate(seed_smiles, db, depth=2):
@@ -82,7 +117,7 @@ def recreate(seed_smiles, db, depth=2):
     g : Networkx DiGraph
         A directed, biparite graph representing the chemical network.
     """
-    graph = nx.DiGraph()
+    graph = networkx.DiGraph()
 
     processed = set()
     queue = collections.deque([(seed_smiles, None, depth)])
