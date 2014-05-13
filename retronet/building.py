@@ -87,8 +87,11 @@ def apply(chem, transforms):
     while queue:
         patt = queue.popleft()
 
-        for t in transforms.nodes[patt]['transforms']:
-            current_sets = chem.make_retrostep(t)
+        for t in transforms.node[patt]['transforms']:
+            try:
+                current_sets = chem.make_retrostep(t)
+            except RuntimeError:
+                continue
             if not current_sets:
                 processed.add(patt)
                 break
