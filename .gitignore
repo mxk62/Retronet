@@ -3,6 +3,11 @@
 *.err
 *.out
 *.tmp
+*.gexf
+*.graphml
 
 # Ignore Python byte code files.
 *.pyc
+
+# Ignore IDE directory
+.idea
