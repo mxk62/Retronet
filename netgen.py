@@ -41,33 +41,37 @@ for t in transforms:
         continue
     patterns.add(patt)
     cores.setdefault(patt.smiles, []).append(t)
-if False:
+if True:
     trans_graph = networkx.DiGraph()
     for patt in patterns:
         trans_graph.add_node(patt.smiles)
 else:
     trans_graph = rn.create_depgraph(patterns)
 
+# Having sequences as node attributes make write_gexf() fail, thus we are
+# making a copy of the graph with lists of duplicates stripped.
+g = trans_graph.copy()
+for v in g:
+    try:
+        del g.node[v]['duplicates']
+    except KeyError:
+        continue
+
 # Write down the dependency graph.
-networkx.write_gexf(trans_graph, 'depgraph.gexf')
+networkx.write_gexf(g, 'depgraph.gexf')
 
 # Write down example chemical and its descendants.
-chem_env = networkx.bfs_tree(trans_graph, 'c1ccccc1')
+chem_env = networkx.bfs_tree(g, 'c1ccccc1')
 networkx.write_gexf(chem_env, 'benzene.gexf')
-
-print 'Graph size: ', len(trans_graph.nodes()), len(trans_graph.edges())
 
 # Associate transforms with graph patterns
 for smi in trans_graph.nodes():
     trans_graph.node[smi]['transforms'] = cores[smi]
     try:
         for dup in trans_graph.node[smi]['duplicates']:
-            trans_graph.nodes[smi]['transforms'].extend(cores[dup])
+            trans_graph.node[smi]['transforms'].extend(cores[dup])
     except KeyError:
         continue
-
-print '# transforms:', sum(len(trans_graph.node[v]['transforms'])
-                           for v in trans_graph.nodes())
 
 # Read the SMILES from an external file.
 with open(args.file) as f:
