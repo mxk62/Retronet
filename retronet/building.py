@@ -32,7 +32,7 @@ def populate(smiles, transforms, depth=2):
         chem_smi, rxn_id, depth = queue.popleft()
 
         # Add a node to the graph if it is not already there.
-        if not graph.has_node(chem_smi):
+        if chem_smi not in graph:
             graph.add_node(chem_smi, bipartite=0)
 
         # Update its outgoing edges if there is a successor (a reaction which
@@ -63,7 +63,7 @@ def populate(smiles, transforms, depth=2):
     return graph
 
 
-def apply(chem, transforms):
+def apply(chem, patterns):
     """Applies available transforms to a given chemical.
 
     Parameters
@@ -82,12 +82,12 @@ def apply(chem, transforms):
     reactant_sets = set()
 
     processed = set()
-    queue = collections.deque([t for t in transforms.nodes_iter()
-                               if len(transforms.predecessors(t)) == 0])
+    queue = collections.deque([t for t in patterns.nodes_iter()
+                               if len(patterns.predecessors(t)) == 0])
     while queue:
         patt = queue.popleft()
 
-        for t in transforms.node[patt]['transforms']:
+        for t in patterns.node[patt]['transforms']:
             try:
                 current_sets = chem.make_retrostep(t)
             except RuntimeError:
@@ -98,8 +98,8 @@ def apply(chem, transforms):
             reactant_sets.update(current_sets)
 
         if patt not in processed:
-            queue.extend([v for v in transforms.successors(patt)])
-            processed.add(patt)
+            queue.extend([v for v in patterns.successors(patt)])
+        processed.add(patt)
     return reactant_sets
 
 
@@ -128,7 +128,7 @@ def recreate(seed_smiles, db, depth=2):
         chem_smi, rxn_id, depth = queue.popleft()
 
         # Add a node to the graph if it is not already there.
-        if not graph.has_node(chem_smi):
+        if chem_smi not in graph:
             graph.add_node(chem_smi, bipartite=0)
 
         # Update its outgoing edges if there is a successor (a reaction which
