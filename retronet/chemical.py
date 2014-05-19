@@ -16,6 +16,16 @@ class Chemical(object):
     def __str__(self):
         return "%s" % self.smiles
 
+    def has_fragment(self, frag):
+        """Returns True if a given fragment is present on chemical.
+
+        Parameters
+        ----------
+        frag : Pattern
+            A pattern representing the fragment of interest.
+        """
+        return self.mol.HasSubstructMatch(frag.templates[0])
+
     def make_retrostep(self, transform):
         """Returns unique sets of substrate SMILES.
 
