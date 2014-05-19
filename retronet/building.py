@@ -76,30 +76,26 @@ def apply(chem, patterns):
     Returns
     -------
     reactants : set
-        A set of reactant sets obtained after applying all compatible
+        Possible reactant sets obtained after applying all compatible
         transforms.
     """
     reactant_sets = set()
-
-    processed = set()
-    queue = collections.deque([t for t in patterns.nodes_iter()
-                               if len(patterns.predecessors(t)) == 0])
+    queue = collections.deque([v for v in patterns.nodes_iter()
+                               if len(patterns.predecessors(v)) == 0])
+    discovered = set(queue)
     while queue:
         patt = queue.popleft()
-
+        if not chem.has_fragment(patt):
+            continue
         for t in patterns.node[patt]['transforms']:
             try:
                 current_sets = chem.make_retrostep(t)
             except RuntimeError:
                 continue
-            if not current_sets:
-                processed.add(patt)
-                break
-            reactant_sets.update(current_sets)
-
-        if patt not in processed:
-            queue.extend([v for v in patterns.successors(patt)])
-        processed.add(patt)
+            reactant_sets |= current_sets
+        undiscovered = set(patterns.successors(patt)) - discovered
+        queue.extend(undiscovered)
+        discovered |= undiscovered
     return reactant_sets
 
 
