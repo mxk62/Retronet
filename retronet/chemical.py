@@ -29,8 +29,18 @@ class Chemical(object):
     def make_retrostep(self, transform):
         """Returns unique sets of substrate SMILES.
 
-        Function returns unique sets of SMILES representing possible
-        substrates obtained by applying a given transform to the product.
+        Parameters
+        ----------
+        transform : Transform
+            A transform which is to applied to chemical.
+
+        Returns
+        -------
+        smiles : set
+            Unique set of SMILES representing possible substrates resulting
+            from applying the input transform.
+
+            .. warning:: Substrates which could not be sanitized are discarded.
         """
         smis = set()
         product_sets = transform.formula.RunReactants((self.mol,))
