@@ -18,8 +18,8 @@ def create_depgraph(patterns):
     g = networkx.DiGraph()
     while patterns:
         patt = patterns.pop()
-        if not g.has_node(patt.smiles):
-            g.add_node(patt.smiles)
+        if patt not in g:
+            g.add_node(patt, id=patt.smiles)
 
         duplicates = set()
         for other in patterns:
@@ -28,18 +28,17 @@ def create_depgraph(patterns):
                 if abs(d) < rn.EPSILON:
                     duplicates.add(other)
                 else:
-                    if not g.has_node(other.smiles):
-                        g.add_node(other.smiles)
-                    edge = (other.smiles, patt.smiles) \
-                        if patt.does_contain(other) \
-                        else (patt.smiles, other.smiles)
+                    if other not in g:
+                        g.add_node(other)
+                    edge = (other, patt) if patt.does_contain(other)\
+                        else (patt, other)
                     g.add_edge(*edge, weight=d)
         if duplicates:
-            g.node[patt.smiles]['duplicates'] = [d.smiles for d in duplicates]
+            g.node[patt]['duplicates'] = [d.smiles for d in duplicates]
         for patt in duplicates:
             patterns.remove(patt)
-            if patt.smiles in g:
-                g.remove_node(patt.smiles)
+            if patt in g:
+                g.remove_node(patt)
     return prune(g)
 
 
