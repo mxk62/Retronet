@@ -14,3 +14,9 @@ class Reaction(object):
             self.products = [chem.Chemical(smi) for smi in self.prod_smis]
         except ValueError:
             raise ValueError('invalid substrates and/or products')
+
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.smiles)
+
+    def __str__(self):
+        return "%s" % self.smiles

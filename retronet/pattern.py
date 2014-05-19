@@ -57,6 +57,9 @@ class Pattern:
     def __hash__(self):
         return hash(self.smiles)
 
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.smarts)
+
     def __str__(self):
         return self.smiles
 

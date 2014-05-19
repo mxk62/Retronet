@@ -10,6 +10,12 @@ class Chemical(object):
         if self.mol is None:
             raise ValueError('invalid SMILES')
 
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__, self.smiles)
+
+    def __str__(self):
+        return "%s" % self.smiles
+
     def make_retrostep(self, transform):
         """Returns unique sets of substrate SMILES.
 
