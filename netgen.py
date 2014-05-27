@@ -66,11 +66,11 @@ chem_env = networkx.bfs_tree(g, 'c1ccccc1')
 networkx.write_gexf(chem_env, 'benzene.gexf')
 
 # Associate transforms with graph patterns
-for smi in trans_graph.nodes():
-    trans_graph.node[smi]['transforms'] = cores[smi]
+for patt in trans_graph.nodes():
+    trans_graph.node[patt]['transforms'] = cores[patt.smiles]
     try:
-        for dup in trans_graph.node[smi]['duplicates']:
-            trans_graph.node[smi]['transforms'].extend(cores[dup])
+        for dup in trans_graph.node[patt]['duplicates']:
+            trans_graph.node[patt]['transforms'].extend(cores[dup])
     except KeyError:
         continue
 
