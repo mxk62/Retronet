@@ -21,6 +21,7 @@ args = parser.parse_args()
 # Acquire all valid, single-retron transforms.
 with open(args.transforms) as f:
     data = pickle.load(f)
+
 transforms = []
 for smarts, rxns in data.items():
     if len(rxns) >= args.popularity:
@@ -41,10 +42,10 @@ for t in transforms:
         continue
     patterns.add(patt)
     cores.setdefault(patt.smiles, []).append(t)
-if True:
+
+if False:
     trans_graph = networkx.DiGraph()
-    for patt in patterns:
-        trans_graph.add_node(patt.smiles)
+    trans_graph.add_nodes_from([p for p in patterns])
 else:
     trans_graph = rn.create_depgraph(patterns)
 
