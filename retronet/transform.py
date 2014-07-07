@@ -1,4 +1,3 @@
-import nose
 from rdkit.Chem import AllChem
 
 
