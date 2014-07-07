@@ -1,17 +1,17 @@
 import collections
 import itertools
 import networkx
-import retronet as rn
+from retronet import Chemical
 
 
 def populate(smiles, transforms, depth=2):
-    """Builds a new retrosynthetic network around a given chemical.
+    """Builds a retrosynthetic chemical network around a given chemical.
 
     Parameters
     ----------
     smiles : string
-        A SMILES representing initial target molecule.
-    transforms : Transform sequence
+        A SMILES representing the target chemical.
+    transforms : sequence of Transform
         A sequence of retrosynthetic transforms which should be used to
         generated reactions.
     depth : integer (optional)
@@ -47,11 +47,11 @@ def populate(smiles, transforms, depth=2):
 
         # Find out valid retrosynthetic reactions using the available
         # transforms.
-        chem = rn.Chemical(chem_smi)
+        chem = Chemical(chem_smi)
         reactant_sets = apply(chem, transforms)
 
         # Add reaction associated with each reactant set and enqueue chemicals
-        # from product sets.
+        # from those sets.
         for reactants in reactant_sets:
             rxn_no = rxn_count.next()
             graph.add_node(rxn_no, bipartite=1)
@@ -96,6 +96,36 @@ def apply(chem, patterns):
         undiscovered = set(patterns.successors(patt)) - discovered
         queue.extend(undiscovered)
         discovered |= undiscovered
+    return reactant_sets
+
+
+def apply_dumb(chem, patterns):
+    """Applies available transform to a given chemical.
+
+    Contrary to apply(), function uses brute-force approach, applying each
+    transform in turn.
+
+    Parameters
+    ----------
+    chem : Chemical
+        A representation of a given chemical compound.
+    transforms : Networkx DiGraph
+        A 'dependency' graph of transforms.
+
+    Returns
+    -------
+    reactants : set
+        Possible reactant sets obtained after applying all compatible
+        transforms.
+    """
+    reactant_sets = set()
+    for patt in patterns:
+        for t in patterns.node[patt]['transforms']:
+            try:
+                current_sets = chem.make_retrostep(t)
+            except RuntimeError:
+                continue
+            reactant_sets |= current_sets
     return reactant_sets
 
 
