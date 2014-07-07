@@ -1,5 +1,4 @@
 import argparse
-import sys
 import pickle
 import time
 import networkx
@@ -71,6 +70,7 @@ for patt in trans_graph.nodes():
     try:
         for dup in trans_graph.node[patt]['duplicates']:
             trans_graph.node[patt]['transforms'].extend(cores[dup])
+        del trans_graph[patt]['duplicates']
     except KeyError:
         continue
 
