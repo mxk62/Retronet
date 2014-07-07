@@ -23,15 +23,17 @@ def create_depgraph(patterns):
 
         duplicates = set()
         for other in patterns:
-            if patt.does_contain(other) or other.does_contain(patt):
-                d = patt.find_distance(other)
-                if abs(d) < rn.EPSILON:
+            patt_in_other = patt.does_contain(other)
+            other_in_patt = other.does_contain(patt)
+            if patt_in_other or other_in_patt:
+                #d = patt.find_distance(other)
+                d = 1.0
+                if patt_in_other and other_in_patt:
                     duplicates.add(other)
                 else:
                     if other not in g:
                         g.add_node(other)
-                    edge = (other, patt) if patt.does_contain(other)\
-                        else (patt, other)
+                    edge = (other, patt) if patt_in_other else (patt, other)
                     g.add_edge(*edge, weight=d)
         if duplicates:
             g.node[patt]['duplicates'] = [d.smiles for d in duplicates]
