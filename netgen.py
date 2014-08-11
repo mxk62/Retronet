@@ -1,8 +1,10 @@
 import argparse
 import logging
+import multiprocessing
 import networkx
 import pickle
 import time
+import zmq
 import retronet as rn
 
 
@@ -12,8 +14,6 @@ def main():
     parser.add_argument('-d', '--depth', type=int, default=1,
                         help='Maximal network depth.')
     parser.add_argument('-p', '--popularity', type=int, default=5,
-                        help='Core popularity threshold.')
-    parser.add_argument('-g', '--graph', type=str, default='smart',
                         help='Core popularity threshold.')
     parser.add_argument('-t', '--transforms', type=str, default='cores.dat',
                         help='File with available transforms.')
@@ -32,54 +32,6 @@ def main():
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
-    # Divide transforms into groups sharing the same retron.
-    start = time.clock()
-    cores = {}
-    patterns = set()
-    for t in transforms:
-        try:
-            patt = rn.Pattern(t.retrons[0])
-        except ValueError:
-            continue
-        patterns.add(patt)
-        cores.setdefault(patt.smiles, []).append(t)
-    eta = time.clock() - start
-    logging.info('Transforms divided into %d patterns in %f s.' % (
-        len(patterns),  eta))
-
-    start = time.clock()
-    if args.graph == 'smart':
-        trans_graph = rn.create_depgraph(patterns)
-    else:
-        trans_graph = networkx.DiGraph()
-        trans_graph.add_nodes_from([p for p in patterns])
-    eta = time.clock() - start
-
-    # Having sequences as node attributes make write_gexf() fail, thus we are
-    # making a copy of the graph with lists of duplicates stripped.
-    g = trans_graph.copy()
-    for v in g:
-        try:
-            del g.node[v]['duplicates']
-        except KeyError:
-            continue
-    networkx.write_gexf(g, 'depgraph.gexf')
-    g.clear()
-    logging.info('Dependency graph created and saved in %f s.' % eta)
-
-    start = time.clock()
-    # Associate transforms with graph patterns
-    for patt in trans_graph.nodes():
-        trans_graph.node[patt]['transforms'] = cores[patt.smiles]
-        try:
-            for dup in trans_graph.node[patt]['duplicates']:
-                trans_graph.node[patt]['transforms'].extend(cores[dup])
-            del trans_graph[patt]['duplicates']
-        except KeyError:
-            continue
-    eta = time.clock() - start
-    logging.info('Transforms added to graph in %f s.' % eta)
-
     # Read the SMILES from an external file.
     logging.info('Starting building networks for targets...')
     with open(args.file) as f:
@@ -90,10 +42,9 @@ def main():
     for idx, smi in enumerate(smiles):
         # Time each build individually.
         start = time.clock()
-        network = rn.populate_serial(smi, trans_graph, depth=args.depth)
-        #network = rn.recreate(smi, db, depth=args.depth)
+        network = rn.populate(smi, transforms, depth=args.depth)
         eta = time.clock() - start
-        logging.info('Finished building for %s.' % smi)
+        logging.info('Finished building for %s in %f s.' % (smi, eta))
 
         # Gather statistics and write them down to a file.
         stats = rn.count_nodes(network, smi, args.depth)
@@ -139,7 +90,7 @@ def get_transforms(filename, popularity=5):
         synthons, retrons = smarts.split('>>')
         try:
             t = rn.Transform('{0}>>{1}'.format(retrons, synthons))
-        except ValueError:
+        except (RuntimeError, ValueError):
             continue
         if len(t.retrons) == 1:
             transforms.append(t)
@@ -147,4 +98,24 @@ def get_transforms(filename, popularity=5):
 
 
 if __name__ == '__main__':
+    # Create pool of workers to distribute tasks.
+    pool_size = multiprocessing.cpu_count()
+    pool_size = 1
+    for num in range(pool_size):
+        w = multiprocessing.Process(target=rn.worker, args=(num,))
+        w.start()
+    print '%d workers spawned' % pool_size
+
+    context = zmq.Context()
+
+    # Set up a controller.
+    controller = context.socket(zmq.PUB)
+    controller.bind('tcp://*:5557')
+
+    # Do the stuff.
     main()
+
+    # Terminate workers.
+    controller.send_string('DONE')
+
+

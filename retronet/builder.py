@@ -1,0 +1,89 @@
+import itertools
+import networkx
+import zmq
+from retronet import Chemical
+
+
+def populate(smiles, transforms, depth=2):
+    """Builds a retrosynthetic chemical network around a given chemical.
+
+    Parameters
+    ----------
+    smiles : string
+        A SMILES representing the target chemical.
+    transforms : sequence of Transform
+        A sequence of retrosynthetic transforms which should be used to
+        generated reactions.
+    depth : integer (optional)
+        Maximal number of synthetics steps, defaults to 2.
+
+    Returns
+    -------
+    g : Networkx DiGraph
+        A directed, biparite graph representing the chemical network.
+    """
+    context = zmq.Context()
+
+    # Set up a channel to communicate with workers.
+    #socket = context.socket(zmq.REP)
+    socket = context.socket(zmq.PUSH)
+    socket.bind('tcp://*:5555')
+
+    # Set up a channel to gather results
+    receiver = context.socket(zmq.PULL)
+    receiver.bind('tcp://*:5556')
+
+    graph = networkx.DiGraph()
+
+    rxn_counter = itertools.count()
+    lvl_counter = itertools.count()
+
+    current_depth = lvl_counter.next()
+    current_nodes = {(smiles, None)}
+    while current_nodes:
+        next_nodes = set()
+
+        for chem_smi, rxn_id in current_nodes:
+
+            # Add a node to the graph if it is not already there.
+            if chem_smi not in graph:
+                graph.add_node(chem_smi, bipartite=0)
+
+                if current_depth < depth:
+                    # Find out valid retrosynthetic reactions using the
+                    # available transforms.
+                    chem = Chemical(chem_smi)
+                    print chem.smiles, len(transforms)
+
+                    # Distribute transforms to perform among the workers.
+                    for t in transforms:
+                        #message = socket.recv_string()
+                        #print "Received request: %s" % message
+                        print "Sending task: apply %s to %s." % (
+                            t.smarts, chem.smiles)
+                        socket.send_pyobj([chem, t])
+
+                    # Collect results from different workers.
+                    reactant_sets = set()
+                    for i in range(len(transforms)):
+                        message = receiver.recv_pyobj()
+                        if message:
+                            reactant_sets.update(message)
+
+                    # Add reaction associated with each reactant set and
+                    # enqueue chemicals from those sets.
+                    for reactants in reactant_sets:
+                        rxn_no = rxn_counter.next()
+                        graph.add_node(rxn_no, bipartite=1)
+                        graph.add_edge(rxn_no, chem_smi)
+                        next_nodes.update((smi, rxn_no) for smi in reactants)
+
+            # Update outgoing edges if there is a successor (a reaction
+            # which uses it as a reactant).
+            if rxn_id is not None:
+                graph.add_edge(chem_smi, rxn_id)
+
+        current_nodes = set(next_nodes)
+        current_depth = lvl_counter.next()
+
+    return graph
