@@ -27,37 +27,38 @@ def populate_serial(smiles, transforms, depth=2):
     rxn_counter = itertools.count()
     lvl_counter = itertools.count()
 
-    current_lvl = {(smiles, None)}
-    while current_lvl:
-        next_lvl = set()
+    current_depth = lvl_counter.next()
+    current_nodes = {(smiles, None)}
+    while current_chems:
+        next_nodes = set()
 
-        for chem_smi, rxn_id in current_lvl:
+        for chem_smi, rxn_id in current_nodes:
 
             # Add a node to the graph if it is not already there.
             if chem_smi not in graph:
                 graph.add_node(chem_smi, bipartite=0)
 
-                # Find out valid retrosynthetic reactions using the available
-                # transforms.
-                chem = Chemical(chem_smi)
-                reactant_sets = apply(chem, transforms)
+                if current_depth < depth:
+                    # Find out valid retrosynthetic reactions using the
+                    # available transforms.
+                    chem = Chemical(chem_smi)
+                    reactant_sets = apply(chem, transforms)
 
-                # Add reaction associated with each reactant set and enqueue
-                # chemicals from those sets.
-                for reactants in reactant_sets:
-                    rxn_no = rxn_counter.next()
-                    graph.add_node(rxn_no, bipartite=1)
-                    graph.add_edge(rxn_no, chem_smi)
-                    next_lvl.update((smi, rxn_no) for smi in reactants)
+                    # Add reaction associated with each reactant set and
+                    # enqueue chemicals from those sets.
+                    for reactants in reactant_sets:
+                        rxn_no = rxn_counter.next()
+                        graph.add_node(rxn_no, bipartite=1)
+                        graph.add_edge(rxn_no, chem_smi)
+                        next_nodes.update((smi, rxn_no) for smi in reactants)
 
             # Update outgoing edges if there is a successor (a reaction
             # which uses it as a reactant).
             if rxn_id is not None:
                 graph.add_edge(chem_smi, rxn_id)
 
-        current_lvl = set(next_lvl)
-        if lvl_counter.next() == depth:
-            break
+        current_chems = set(next_nodes)
+        current_depth = lvl_counter.next()
 
     return graph
 
