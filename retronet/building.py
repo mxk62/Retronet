@@ -29,7 +29,7 @@ def populate_serial(smiles, transforms, depth=2):
 
     current_depth = lvl_counter.next()
     current_nodes = {(smiles, None)}
-    while current_chems:
+    while current_nodes:
         next_nodes = set()
 
         for chem_smi, rxn_id in current_nodes:
@@ -57,7 +57,7 @@ def populate_serial(smiles, transforms, depth=2):
             if rxn_id is not None:
                 graph.add_edge(chem_smi, rxn_id)
 
-        current_chems = set(next_nodes)
+        current_nodes = set(next_nodes)
         current_depth = lvl_counter.next()
 
     return graph
