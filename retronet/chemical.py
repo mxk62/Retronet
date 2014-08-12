@@ -21,10 +21,10 @@ class Chemical(object):
 
         Parameters
         ----------
-        frag : Pattern
+        frag : RDKit query Mol
             A pattern representing the fragment of interest.
         """
-        return self.mol.HasSubstructMatch(frag.templates[0])
+        return self.mol.HasSubstructMatch(frag)
 
     def make_retrostep(self, transform):
         """Returns unique sets of substrate SMILES.
@@ -43,13 +43,18 @@ class Chemical(object):
             .. warning:: Substrates which could not be sanitized are discarded.
         """
         smis = set()
-        product_sets = transform.formula.RunReactants((self.mol,))
-        if product_sets:
-            for products in product_sets:
+
+        products = [self.mol]
+        if transform.byproducts:
+            products.extend(transform.byproducts)
+
+        reactant_sets = transform.formula.RunReactants(products)
+        if reactant_sets:
+            for reactants in reactant_sets:
                 try:
-                    for m in products:
+                    for m in reactants:
                         Chem.SanitizeMol(m)
                 except ValueError:
                     continue
-                smis.add(frozenset([Chem.MolToSmiles(m) for m in products]))
+                smis.add(frozenset(Chem.MolToSmiles(m) for m in reactants))
         return smis

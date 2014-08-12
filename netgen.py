@@ -1,7 +1,7 @@
 import argparse
 import logging
 import networkx
-import pickle
+import pymongo
 import time
 import retronet as rn
 
@@ -9,14 +9,15 @@ import retronet as rn
 def main():
     # Parse command line arguments.
     parser = argparse.ArgumentParser()
+    parser.add_argument('-C', '--collection', type=str, default='retros',
+                        help='Database collection holding transforms, '
+                             'defaults to \'retros\'.')
+    parser.add_argument('-D', '--database', type=str, default='nerc',
+                        help='Database to connect to, defaults to \'nerc\'.')
+    parser.add_argument('-p', '--popularity', type=int, default=5,
+                        help='Transform popularity threshold ')
     parser.add_argument('-d', '--depth', type=int, default=1,
                         help='Maximal network depth.')
-    parser.add_argument('-p', '--popularity', type=int, default=5,
-                        help='Core popularity threshold.')
-    parser.add_argument('-g', '--graph', type=str, default='smart',
-                        help='Core popularity threshold.')
-    parser.add_argument('-t', '--transforms', type=str, default='cores.dat',
-                        help='File with available transforms.')
     parser.add_argument('file', type=str,
                         help='File with chemicals SMILES.')
     args = parser.parse_args()
@@ -26,59 +27,14 @@ def main():
                         level=logging.INFO,
                         format='%(name)s: %(levelname)s: %(message)s')
 
-    # Acquire all valid, single-retron transforms.
+    # Acquire all valid transforms.
     start = time.clock()
-    transforms = get_transforms(args.transforms, popularity=args.popularity)
+    client = pymongo.MongoClient()
+    db = client[args.database]
+    transforms = get_transforms(db, args.collection,
+                                popularity=args.popularity)
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
-
-    # Divide transforms into groups sharing the same retron.
-    start = time.clock()
-    cores = {}
-    patterns = set()
-    for t in transforms:
-        try:
-            patt = rn.Pattern(t.retrons[0])
-        except ValueError:
-            continue
-        patterns.add(patt)
-        cores.setdefault(patt.smiles, []).append(t)
-    eta = time.clock() - start
-    logging.info('Transforms divided into %d patterns in %f s.' % (
-        len(patterns),  eta))
-
-    start = time.clock()
-    if args.graph == 'smart':
-        trans_graph = rn.create_depgraph(patterns)
-    else:
-        trans_graph = networkx.DiGraph()
-        trans_graph.add_nodes_from([p for p in patterns])
-    eta = time.clock() - start
-
-    # Having sequences as node attributes make write_gexf() fail, thus we are
-    # making a copy of the graph with lists of duplicates stripped.
-    g = trans_graph.copy()
-    for v in g:
-        try:
-            del g.node[v]['duplicates']
-        except KeyError:
-            continue
-    networkx.write_gexf(g, 'depgraph.gexf')
-    g.clear()
-    logging.info('Dependency graph created and saved in %f s.' % eta)
-
-    start = time.clock()
-    # Associate transforms with graph patterns
-    for patt in trans_graph.nodes():
-        trans_graph.node[patt]['transforms'] = cores[patt.smiles]
-        try:
-            for dup in trans_graph.node[patt]['duplicates']:
-                trans_graph.node[patt]['transforms'].extend(cores[dup])
-            del trans_graph[patt]['duplicates']
-        except KeyError:
-            continue
-    eta = time.clock() - start
-    logging.info('Transforms added to graph in %f s.' % eta)
 
     # Read the SMILES from an external file.
     logging.info('Starting building networks for targets...')
@@ -89,11 +45,10 @@ def main():
     # retrosynthetic transforms.
     for idx, smi in enumerate(smiles):
         # Time each build individually.
-        start = time.clock()
-        network = rn.populate_serial(smi, trans_graph, depth=args.depth)
-        #network = rn.recreate(smi, db, depth=args.depth)
-        eta = time.clock() - start
-        logging.info('Finished building for %s.' % smi)
+        start = time.time()
+        network = rn.populate(smi, transforms, depth=args.depth)
+        eta = time.time() - start
+        logging.info('Finished building for %s in %f s.' % (smi, eta))
 
         # Gather statistics and write them down to a file.
         stats = rn.count_nodes(network, smi, args.depth)
@@ -109,16 +64,15 @@ def main():
     logging.info('All builds finished.')
 
 
-def get_transforms(filename, popularity=5):
+def get_transforms(db, collection, popularity=5):
     """Acquires transforms from an external data file.
 
     Parameters
     ----------
-    filename : string
-        Name of the file storing available transforms. File is expected
-        to contain a pickled dictionary with keys being transforms encoded
-        in Daylight SMARTS format and values representing id numbers of
-        reactions transforms applied to.
+    db : mongodb
+        Name of a mongodb.
+    collection : mongodb collection
+        Collection containing retrosynthetic transforms.
     popularity : integer
         Popularity threshold, i.e. the minimal number of reaction a
         transform can be applied to. Transforms below the threshold are
@@ -129,19 +83,25 @@ def get_transforms(filename, popularity=5):
     transforms : list of Transforms
         A list of transforms.
     """
-    with open(filename) as f:
-        data = pickle.load(f)
-    data = {smarts: rxns
-            for smarts, rxns in data.items() if len(rxns) >= popularity}
-
     transforms = []
-    for smarts, rxns in data.items():
-        synthons, retrons = smarts.split('>>')
-        try:
-            t = rn.Transform('{0}>>{1}'.format(retrons, synthons))
-        except ValueError:
+    for rec in db[collection].find({'expert': True}):
+        byproducts = None
+        if 'product_smiles' in rec:
+            byproducts = [s.encode('ascii') for s in rec['product_smiles']]
+
+        if 'popularity' in rec and rec['populairty'] < popularity:
             continue
-        if len(t.retrons) == 1:
+
+        try:
+            t = rn.Transform(rec['reaction_smarts'].encode('ascii'),
+                             db_id=rec['_id'], byproducts=byproducts)
+        except (KeyError, ValueError):
+            continue
+
+        # Some transforms has to many byproducts listed (e.g. 87), filter
+        # them out.
+        nb = len(t.byproducts) if t.byproducts is not None else 0
+        if nb == len(t.retrons) - 1:
             transforms.append(t)
     return transforms
 
