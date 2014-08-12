@@ -2,7 +2,7 @@ import argparse
 import logging
 import multiprocessing
 import networkx
-import pickle
+import pymongo
 import time
 import zmq
 import retronet as rn
@@ -11,12 +11,15 @@ import retronet as rn
 def main():
     # Parse command line arguments.
     parser = argparse.ArgumentParser()
+    parser.add_argument('-C', '--collection', type=str, default='retros',
+                        help='Database collection holding transforms, '
+                             'defaults to \'retros\'.')
+    parser.add_argument('-D', '--database', type=str, default='nerc',
+                        help='Database to connect to, defaults to \'nerc\'.')
+    parser.add_argument('-p', '--popularity', type=int, default=5,
+                        help='Transform popularity threshold ')
     parser.add_argument('-d', '--depth', type=int, default=1,
                         help='Maximal network depth.')
-    parser.add_argument('-p', '--popularity', type=int, default=5,
-                        help='Core popularity threshold.')
-    parser.add_argument('-t', '--transforms', type=str, default='cores.dat',
-                        help='File with available transforms.')
     parser.add_argument('file', type=str,
                         help='File with chemicals SMILES.')
     args = parser.parse_args()
@@ -26,9 +29,13 @@ def main():
                         level=logging.INFO,
                         format='%(name)s: %(levelname)s: %(message)s')
 
-    # Acquire all valid, single-retron transforms.
+    # Acquire all valid transforms.
     start = time.clock()
-    transforms = get_transforms(args.transforms, popularity=args.popularity)
+    client = pymongo.MongoClient()
+    db = client[args.database]
+
+    transforms = get_transforms(db, args.collection,
+                                popularity=args.popularity)
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
@@ -41,9 +48,9 @@ def main():
     # retrosynthetic transforms.
     for idx, smi in enumerate(smiles):
         # Time each build individually.
-        start = time.clock()
+        start = time.time()
         network = rn.populate(smi, transforms, depth=args.depth)
-        eta = time.clock() - start
+        eta = time.time() - start
         logging.info('Finished building for %s in %f s.' % (smi, eta))
 
         # Gather statistics and write them down to a file.
@@ -60,16 +67,15 @@ def main():
     logging.info('All builds finished.')
 
 
-def get_transforms(filename, popularity=5):
+def get_transforms(db, collection, popularity=5):
     """Acquires transforms from an external data file.
 
     Parameters
     ----------
-    filename : string
-        Name of the file storing available transforms. File is expected
-        to contain a pickled dictionary with keys being transforms encoded
-        in Daylight SMARTS format and values representing id numbers of
-        reactions transforms applied to.
+    db : mongodb
+        Name of a mongodb.
+    collection : mongodb collection
+        Collection containing retrosynthetic transforms.
     popularity : integer
         Popularity threshold, i.e. the minimal number of reaction a
         transform can be applied to. Transforms below the threshold are
@@ -80,37 +86,43 @@ def get_transforms(filename, popularity=5):
     transforms : list of Transforms
         A list of transforms.
     """
-    with open(filename) as f:
-        data = pickle.load(f)
-    data = {smarts: rxns
-            for smarts, rxns in data.items() if len(rxns) >= popularity}
-
     transforms = []
-    for smarts, rxns in data.items():
-        synthons, retrons = smarts.split('>>')
-        try:
-            t = rn.Transform('{0}>>{1}'.format(retrons, synthons))
-        except (RuntimeError, ValueError):
+    for rec in db[collection].find({'expert': True}):
+        byproducts = None
+        if 'product_smiles' in rec:
+            byproducts = [s.encode('ascii') for s in rec['product_smiles']]
+
+        if 'popularity' in rec and rec['populairty'] < popularity:
             continue
-        if len(t.retrons) == 1:
+
+        try:
+            t = rn.Transform(rec['reaction_smarts'].encode('ascii'),
+                             db_id=rec['_id'], byproducts=byproducts)
+        except (KeyError, ValueError):
+            continue
+
+        # Some transforms has to many byproducts listed (e.g. 87), filter
+        # them out.
+        nb = len(t.byproducts) if t.byproducts is not None else 0
+        if nb == len(t.retrons) - 1:
             transforms.append(t)
     return transforms
 
 
 if __name__ == '__main__':
-    # Create pool of workers to distribute tasks.
-    pool_size = multiprocessing.cpu_count()
-    pool_size = 1
-    for num in range(pool_size):
-        w = multiprocessing.Process(target=rn.worker, args=(num,))
-        w.start()
-    print '%d workers spawned' % pool_size
-
     context = zmq.Context()
 
     # Set up a controller.
     controller = context.socket(zmq.PUB)
     controller.bind('tcp://*:5557')
+
+    # Create pool of workers to distribute tasks.
+    pool_size = multiprocessing.cpu_count() / 2
+    pool_size = 1
+    for num in range(pool_size):
+        w = multiprocessing.Process(target=rn.worker, args=(num,))
+        w.start()
+    print '%d workers spawned' % pool_size
 
     # Do the stuff.
     main()
