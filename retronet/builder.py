@@ -25,13 +25,15 @@ def populate(smiles, transforms, depth=2):
     context = zmq.Context()
 
     # Set up a channel to communicate with workers.
-    #socket = context.socket(zmq.REP)
     socket = context.socket(zmq.PUSH)
     socket.bind('tcp://*:5555')
 
     # Set up a channel to gather results
     receiver = context.socket(zmq.PULL)
     receiver.bind('tcp://*:5556')
+
+    batch_size = 100
+    batches = partition(transforms.keys(), batch_size)
 
     graph = networkx.DiGraph()
 
@@ -54,17 +56,13 @@ def populate(smiles, transforms, depth=2):
                 if current_depth < depth:
 
                     # Distribute transforms to perform among the workers.
-                    for t in transforms.values():
-                        #message = socket.recv_string()
-                        #print "Received request: %s" % message
-                        print "Sending task: apply %d to %s." % (
-                            t.id, chem_smi)
-                        message = {'smiles': chem_smi, 'trans_id': t.id}
+                    for batch in batches:
+                        message = {'smiles': chem_smi, 'trans_ids': batch}
                         socket.send_json(json.dumps(message))
 
                     # Collect results from different workers.
                     reactant_sets = set()
-                    for i in range(len(transforms)):
+                    for i in range(len(batches)):
                         message = json.loads(receiver.recv_json())
                         if message['results'] != 'NONE':
                             reactant_sets.update(
@@ -87,3 +85,7 @@ def populate(smiles, transforms, depth=2):
         current_depth = lvl_counter.next()
 
     return graph
+
+
+def partition(list, n):
+    return [list[i:i+n] for i in range(0, len(list), n)]

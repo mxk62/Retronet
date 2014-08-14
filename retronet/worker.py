@@ -38,12 +38,14 @@ def worker(num, transforms):
 
             # Process the task, i.e. make a retrostep.
             message = json.loads(receiver.recv_json())
-            smiles, trans_id = message.values()
+            smiles, ids = message['smiles'], message['trans_ids']
 
             chem = Chemical(smiles)
-            print 'Worker-%d: applying transform %d to %s' % (
-                num, trans_id, chem.smiles)
-            reactant_sets = chem.make_retrostep(transforms[trans_id])
+            reactant_sets = []
+            for i in ids:
+                print 'Worker-%d: applying transform %d to %s' % (
+                    num, i, chem.smiles)
+                reactant_sets.extend(chem.make_retrostep(transforms[i]))
 
             # Send back the results.
             print 'Worker-%d: sending back %d results.' % (
