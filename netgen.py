@@ -39,6 +39,22 @@ def main():
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
+    context = zmq.Context()
+
+    # Set up a controller.
+    controller = context.socket(zmq.PUB)
+    controller.bind('tcp://*:5557')
+
+    # Create pool of workers to distribute tasks.
+    pool_size = multiprocessing.cpu_count()
+
+    workers = {}
+    for num in range(pool_size):
+        workers[num] = multiprocessing.Process(target=rn.worker,
+                                               args=(num, transforms))
+        workers[num].start()
+    print '%d workers spawned' % pool_size
+
     # Read the SMILES from an external file.
     logging.info('Starting building networks for targets...')
     with open(args.file) as f:
@@ -66,6 +82,9 @@ def main():
         network.clear()
     logging.info('All builds finished.')
 
+    # Terminate workers.
+    controller.send_string('DONE')
+
 
 def get_transforms(db, collection, popularity=5):
     """Acquires transforms from an external data file.
@@ -86,7 +105,7 @@ def get_transforms(db, collection, popularity=5):
     transforms : list of Transforms
         A list of transforms.
     """
-    transforms = []
+    transforms = {}
     for rec in db[collection].find({'expert': True}):
         byproducts = None
         if 'product_smiles' in rec:
@@ -105,29 +124,10 @@ def get_transforms(db, collection, popularity=5):
         # them out.
         nb = len(t.byproducts) if t.byproducts is not None else 0
         if nb == len(t.retrons) - 1:
-            transforms.append(t)
+            transforms[t.id] = t
     return transforms
 
 
 if __name__ == '__main__':
-    context = zmq.Context()
-
-    # Set up a controller.
-    controller = context.socket(zmq.PUB)
-    controller.bind('tcp://*:5557')
-
-    # Create pool of workers to distribute tasks.
-    pool_size = multiprocessing.cpu_count() / 2
-    pool_size = 1
-    for num in range(pool_size):
-        w = multiprocessing.Process(target=rn.worker, args=(num,))
-        w.start()
-    print '%d workers spawned' % pool_size
-
-    # Do the stuff.
     main()
-
-    # Terminate workers.
-    controller.send_string('DONE')
-
 

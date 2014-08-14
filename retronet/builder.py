@@ -1,7 +1,7 @@
 import itertools
+import json
 import networkx
 import zmq
-from retronet import Chemical
 
 
 def populate(smiles, transforms, depth=2):
@@ -49,26 +49,26 @@ def populate(smiles, transforms, depth=2):
             if chem_smi not in graph:
                 graph.add_node(chem_smi, bipartite=0)
 
+                # Find out valid retrosynthetic reactions using the
+                # available transforms.
                 if current_depth < depth:
-                    # Find out valid retrosynthetic reactions using the
-                    # available transforms.
-                    chem = Chemical(chem_smi)
-                    print chem.smiles, len(transforms)
 
                     # Distribute transforms to perform among the workers.
-                    for t in transforms:
+                    for t in transforms.values():
                         #message = socket.recv_string()
                         #print "Received request: %s" % message
-                        print "Sending task: apply %s to %s." % (
-                            t.smarts, chem.smiles)
-                        socket.send_pyobj([chem, t])
+                        print "Sending task: apply %d to %s." % (
+                            t.id, chem_smi)
+                        message = {'smiles': chem_smi, 'trans_id': t.id}
+                        socket.send_json(json.dumps(message))
 
                     # Collect results from different workers.
                     reactant_sets = set()
                     for i in range(len(transforms)):
-                        message = receiver.recv_pyobj()
-                        if message:
-                            reactant_sets.update(message)
+                        message = json.loads(receiver.recv_json())
+                        if message['results'] != 'NONE':
+                            reactant_sets.update(
+                                frozenset(smis) for smis in message['results'])
 
                     # Add reaction associated with each reactant set and
                     # enqueue chemicals from those sets.

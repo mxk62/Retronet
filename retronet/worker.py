@@ -1,22 +1,21 @@
+import json
 import zmq
+from retronet import Chemical
 
 
-def worker(num):
+def worker(num, transforms):
     """
     """
 
-    print 'Spawning %d worker' % num
     context = zmq.Context()
 
     # Set up channel to request for a new task.
     receiver = context.socket(zmq.PULL)
     receiver.connect('tcp://localhost:5555')
-    print 'Receiver set up.'
 
     # Set up a channel to send the results to.
     sender = context.socket(zmq.PUSH)
     sender.connect('tcp://localhost:5556')
-    print 'Sender set up.'
 
     # Set up channel for control input.
     controller = context.socket(zmq.SUB)
@@ -27,7 +26,6 @@ def worker(num):
     poller = zmq.Poller()
     poller.register(receiver, zmq.POLLIN)
     poller.register(controller, zmq.POLLIN)
-    print 'Poller set up.'
 
     while True:
         socks = dict(poller.poll())
@@ -39,16 +37,19 @@ def worker(num):
             #print 'Sending request \'%s\'' % request
 
             # Process the task, i.e. make a retrostep.
-            message = receiver.recv_pyobj()
-            chem, transform = message
-            print 'Received task: apply %s to %s' % (
-                transform.smarts, chem.smiles)
-            reactant_sets = chem.make_retrostep(transform)
+            message = json.loads(receiver.recv_json())
+            smiles, trans_id = message.values()
+
+            chem = Chemical(smiles)
+            print 'Worker-%d: applying transform %d to %s' % (
+                num, trans_id, chem.smiles)
+            reactant_sets = chem.make_retrostep(transforms[trans_id])
 
             # Send back the results.
-            print 'Worker %d: sending back %d results.' % (
+            print 'Worker-%d: sending back %d results.' % (
                 num, len(reactant_sets))
-            sender.send_pyobj(reactant_sets)
+            message = {'results': reactant_sets if reactant_sets else 'NONE'}
+            sender.send_json(json.dumps(message))
 
         if socks.get(controller) == zmq.POLLIN:
             message = controller.recv_string()

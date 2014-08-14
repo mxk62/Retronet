@@ -8,7 +8,7 @@ class Chemical(object):
         self.smiles = smiles.strip()
         self.mol = Chem.MolFromSmiles(self.smiles)
         if self.mol is None:
-            raise ValueError('invalid SMILES')
+            raise ValueError('invalid chemical SMILES: \'%s\'' % self.smiles)
 
     def __repr__(self):
         return "%s(%r)" % (self.__class__, self.smiles)
@@ -36,8 +36,8 @@ class Chemical(object):
 
         Returns
         -------
-        smiles : set
-            Unique set of SMILES representing possible substrates resulting
+        smiles : tuples of strings
+            A unique set of SMILES representing possible substrates resulting
             from applying the input transform.
 
             .. warning:: Substrates which could not be sanitized are discarded.
@@ -57,4 +57,4 @@ class Chemical(object):
                 except ValueError:
                     continue
                 smis.add(frozenset(Chem.MolToSmiles(m) for m in reactants))
-        return smis
+        return tuple(tuple(s) for s in smis)
