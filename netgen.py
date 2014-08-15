@@ -38,16 +38,17 @@ def main():
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
-    #
-    task_queue, done_queue = multiprocessing.Queue(), multiprocessing.Queue()
-
     # Create pool of workers to distribute tasks.
     pool_size = multiprocessing.cpu_count()
+    pool_size = 2
+    connections = []
+    workers = []
     for num in range(pool_size):
-        w = multiprocessing.Process(
-            target=rn.worker,
-            args=(num, task_queue, done_queue, transforms)
-        )
+        parent, child = multiprocessing.Pipe()
+        connections.append(parent)
+        w = multiprocessing.Process(target=rn.worker,
+                                    args=(num, child, transforms))
+        workers.append(w)
         w.start()
 
     # Read the SMILES from an external file.
@@ -60,8 +61,7 @@ def main():
     for idx, smi in enumerate(smiles):
         # Time each build individually.
         start = time.time()
-        network = rn.populate(task_queue, done_queue, smi, transforms,
-                              depth=args.depth)
+        network = rn.populate(connections, smi, transforms, depth=args.depth)
         eta = time.time() - start
         logging.info('Finished building for %s in %f s.' % (smi, eta))
 
@@ -79,8 +79,8 @@ def main():
     logging.info('All builds finished.')
 
     # Terminate workers.
-    for i in range(pool_size):
-        task_queue.put('STOP')
+    for w in workers:
+        w.join()
 
 
 def get_transforms(db, collection, popularity=5):

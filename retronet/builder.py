@@ -1,16 +1,17 @@
 import itertools
 import networkx
+import time
 
 
-def populate(task_queue, done_queue, smiles, transforms, depth=2):
+def populate(connections, smiles, transforms, depth=2):
     """Builds a retrosynthetic chemical network around a given chemical.
 
     Parameters
     ----------
-    task_queue : Queue
-        Distributes tasks among workers.
-    done_queue : Queue
-        Collects results from workers.
+    connections : list of Connections
+        A sequence of connections to available workers.
+    smiles : string
+        A SMILES representing target molecule.
     transforms : sequence of Transform
         A sequence of retrosynthetic transforms which should be used to
         generated reactions.
@@ -48,12 +49,19 @@ def populate(task_queue, done_queue, smiles, transforms, depth=2):
                     # Distribute transforms to perform among the workers.
                     for no, batch in enumerate(batches):
                         msg = {'smiles': chem_smi, 'trans_ids': batch}
-                        task_queue.put(msg)
+                        connections[no % len(connections)].send(msg)
+
+                        print 'Ventilator: sent \'%s\' to %d.' % (msg, no % len(connections))
+                        time.sleep(1)
 
                     # Collect results from different workers.
                     reactant_sets = set()
                     for i in range(len(batches)):
-                        msg = done_queue.get()
+                        msg = connections[i % len(connections)].recv()
+
+                        print 'Ventilator: received \'%s\' from %d.' % (msg, no % len(connections))
+                        time.sleep(1)
+
                         if msg['results'] != 'NONE':
                             reactant_sets.update(
                                 frozenset(smis) for smis in msg['results'])
