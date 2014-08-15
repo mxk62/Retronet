@@ -1,16 +1,16 @@
 import itertools
-import json
 import networkx
-import zmq
 
 
-def populate(smiles, transforms, depth=2):
+def populate(task_queue, done_queue, smiles, transforms, depth=2):
     """Builds a retrosynthetic chemical network around a given chemical.
 
     Parameters
     ----------
-    smiles : string
-        A SMILES representing the target chemical.
+    task_queue : Queue
+        Distributes tasks among workers.
+    done_queue : Queue
+        Collects results from workers.
     transforms : sequence of Transform
         A sequence of retrosynthetic transforms which should be used to
         generated reactions.
@@ -22,16 +22,6 @@ def populate(smiles, transforms, depth=2):
     g : Networkx DiGraph
         A directed, biparite graph representing the chemical network.
     """
-    context = zmq.Context()
-
-    # Set up a channel to communicate with workers.
-    socket = context.socket(zmq.PUSH)
-    socket.bind('tcp://*:5555')
-
-    # Set up a channel to gather results
-    receiver = context.socket(zmq.PULL)
-    receiver.bind('tcp://*:5556')
-
     batch_size = 100
     batches = partition(transforms.keys(), batch_size)
 
@@ -56,17 +46,17 @@ def populate(smiles, transforms, depth=2):
                 if current_depth < depth:
 
                     # Distribute transforms to perform among the workers.
-                    for batch in batches:
-                        message = {'smiles': chem_smi, 'trans_ids': batch}
-                        socket.send_json(json.dumps(message))
+                    for no, batch in enumerate(batches):
+                        msg = {'smiles': chem_smi, 'trans_ids': batch}
+                        task_queue.put(msg)
 
                     # Collect results from different workers.
                     reactant_sets = set()
                     for i in range(len(batches)):
-                        message = json.loads(receiver.recv_json())
-                        if message['results'] != 'NONE':
+                        msg = done_queue.get()
+                        if msg['results'] != 'NONE':
                             reactant_sets.update(
-                                frozenset(smis) for smis in message['results'])
+                                frozenset(smis) for smis in msg['results'])
 
                     # Add reaction associated with each reactant set and
                     # enqueue chemicals from those sets.
@@ -87,5 +77,19 @@ def populate(smiles, transforms, depth=2):
     return graph
 
 
-def partition(list, n):
-    return [list[i:i+n] for i in range(0, len(list), n)]
+def partition(l, n):
+    """Partitions a list into nonoverlapping sublists of a given length.
+
+    Parameters
+    ----------
+    l : list
+        A list to be partitioned.
+    n : integer
+        Requested chunk size.
+
+    Returns
+    -------
+    p : list
+        A sequence of list representing result of the partitioning.
+    """
+    return [l[i:i+n] for i in range(0, len(l), n)]

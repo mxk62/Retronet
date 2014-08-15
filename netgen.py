@@ -4,7 +4,6 @@ import multiprocessing
 import networkx
 import pymongo
 import time
-import zmq
 import retronet as rn
 
 
@@ -39,21 +38,17 @@ def main():
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
-    context = zmq.Context()
-
-    # Set up a controller.
-    controller = context.socket(zmq.PUB)
-    controller.bind('tcp://*:5557')
+    #
+    task_queue, done_queue = multiprocessing.Queue(), multiprocessing.Queue()
 
     # Create pool of workers to distribute tasks.
     pool_size = multiprocessing.cpu_count()
-
-    workers = {}
     for num in range(pool_size):
-        workers[num] = multiprocessing.Process(target=rn.worker,
-                                               args=(num, transforms))
-        workers[num].start()
-    print '%d workers spawned' % pool_size
+        w = multiprocessing.Process(
+            target=rn.worker,
+            args=(num, task_queue, done_queue, transforms)
+        )
+        w.start()
 
     # Read the SMILES from an external file.
     logging.info('Starting building networks for targets...')
@@ -65,7 +60,8 @@ def main():
     for idx, smi in enumerate(smiles):
         # Time each build individually.
         start = time.time()
-        network = rn.populate(smi, transforms, depth=args.depth)
+        network = rn.populate(task_queue, done_queue, smi, transforms,
+                              depth=args.depth)
         eta = time.time() - start
         logging.info('Finished building for %s in %f s.' % (smi, eta))
 
@@ -83,7 +79,8 @@ def main():
     logging.info('All builds finished.')
 
     # Terminate workers.
-    controller.send_string('DONE')
+    for i in range(pool_size):
+        task_queue.put('STOP')
 
 
 def get_transforms(db, collection, popularity=5):
