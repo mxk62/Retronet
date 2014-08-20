@@ -86,7 +86,7 @@ def main():
 
     # Terminate workers.
     for i in range(pool_size):
-        results.put('STOP')
+        tasks.put('STOP')
 
 
 def get_transforms(db, collection, popularity=5):
