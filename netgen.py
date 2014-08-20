@@ -24,13 +24,18 @@ def main():
                         help='Transform popularity threshold ')
     parser.add_argument('-d', '--depth', type=int, default=1,
                         help='Maximal network depth.')
+    parser.add_argument('-l', '--log', type=str, default='INFO')
     parser.add_argument('file', type=str,
                         help='File with chemicals SMILES.')
     args = parser.parse_args()
 
     # Initialize a logger.
+    log_lvl = args.log
+    num_lvl = getattr(logging, log_lvl.upper(), None)
+    if not isinstance(num_lvl, int):
+        raise ValueError('Invalid log level: %s' % log_lvl)
     logging.basicConfig(filename='netgen.log',
-                        level=logging.INFO,
+                        level=num_lvl,
                         format='%(name)s: %(levelname)s: %(message)s')
 
     # Acquire all valid transforms.
