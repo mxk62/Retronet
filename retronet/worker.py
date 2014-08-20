@@ -1,11 +1,27 @@
-"""
-
+"""Retrosynthetic worker
 """
 from retronet import Chemical
 
 
 def worker(num, tasks, results, transforms):
-    """Performs retrosynthetic steps.
+    """Performs tasks received from the ventilator.
+
+    Each task is represented by a dictionary
+
+        {'smiles': <smiles>, 'trans_ids': <transform ids> }
+
+    where <smiles> is a string describing a chemical in Daylight's SMILES
+    notation and <transform ids> is a list of integers specifying subset of
+    transforms which need to be applied.
+
+    Results, all possible reactant sets derived by application of the
+    transforms subset, are send back to  the sink also as dictionaries,
+
+        {'results': <reactant_sets>}
+
+    where <reactant_sets> is a list of tuples and each tuple consists of
+    strings representing possible reactant set in SMILES notation or is
+    None, if none of the transforms from the subset worked.
 
     Parameters
     ----------

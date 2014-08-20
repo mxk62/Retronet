@@ -8,12 +8,16 @@ def populate(tasks, results, smiles, transforms, depth=2):
     Function use breath-first search approach to generate retrosynthetic
     network around a specified target compound.
 
+    Each transform can be applied to a chemical independently. Thus,
+    to speed things up, transforms are divided into small, adjustable subsets
+    and each subset is applied separately by a pool of independent workers.
+
     Parameters
     ----------
     tasks : Queue
-        A 'ventilator', distributes tasks among workers.
+        A ventilator, distributes tasks among workers.
     results : Queue
-        A 'sink', collects results from workers.
+        A sink, collects results from workers.
     smiles : string
         A target compound encoded in Daylight's SMILES notation.
     transforms : sequence of Transforms

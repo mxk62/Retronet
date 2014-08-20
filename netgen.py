@@ -1,3 +1,8 @@
+"""Main script
+
+Times building a retrosynthetic networks around specified targets and
+analyzes their sizes.
+"""
 import argparse
 import logging
 import multiprocessing
@@ -37,11 +42,10 @@ def main():
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
-    # Initialize share states allowing to exchange data between
-    # processes.
+    # Initialize share states allowing to exchange data between processes.
     #
     # In ZMQ terms, see: http://zguide.zeromq.org/page:all#Divide-and-Conquer,
-    # these are the ventilator and the sink respectively.
+    # these play the roles of the ventilator and the sink respectively.
     tasks, results = multiprocessing.Queue(), multiprocessing.Queue()
 
     # Create pool of workers.
