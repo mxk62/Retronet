@@ -2,29 +2,37 @@ import itertools
 import networkx
 
 
-def populate(task_queue, done_queue, smiles, transforms, depth=2):
-    """Builds a retrosynthetic chemical network around a given chemical.
+def populate(tasks, results, smiles, transforms, depth=2):
+    """Builds a retrosynthetic network around a given chemical.
+
+    Function use breath-first search approach to generate retrosynthetic
+    network around a specified target compound.
 
     Parameters
     ----------
-    task_queue : Queue
-        Distributes tasks among workers.
-    done_queue : Queue
-        Collects results from workers.
-    transforms : sequence of Transform
-        A sequence of retrosynthetic transforms which should be used to
-        generated reactions.
+    tasks : Queue
+        A 'ventilator', distributes tasks among workers.
+    results : Queue
+        A 'sink', collects results from workers.
+    smiles : string
+        A target compound encoded in Daylight's SMILES notation.
+    transforms : sequence of Transforms
+        A sequence of all available retrosynthetic transforms which can be
+        used to generate reactions.
     depth : integer (optional)
         Maximal number of synthetics steps, defaults to 2.
 
     Returns
     -------
-    g : Networkx DiGraph
+    g : Networkx's DiGraph
         A directed, biparite graph representing the chemical network.
     """
-    batch_size = 100
+
+    # Divide available transforms into batches.
+    batch_size = 3000
     batches = partition(transforms.keys(), batch_size)
 
+    # Initialize graph representing the network.
     graph = networkx.DiGraph()
 
     rxn_counter = itertools.count()
@@ -42,19 +50,20 @@ def populate(task_queue, done_queue, smiles, transforms, depth=2):
                 graph.add_node(chem_smi, bipartite=0)
 
                 # Find out valid retrosynthetic reactions using the
-                # available transforms.
+                # available transforms, providing we didn't reach the
+                # terminal depth.
                 if current_depth < depth:
 
                     # Distribute transforms to perform among the workers.
-                    for no, batch in enumerate(batches):
+                    for batch in batches:
                         msg = {'smiles': chem_smi, 'trans_ids': batch}
-                        task_queue.put(msg)
+                        tasks.put(msg)
 
                     # Collect results from different workers.
                     reactant_sets = set()
                     for i in range(len(batches)):
-                        msg = done_queue.get()
-                        if msg['results'] != 'NONE':
+                        msg = results.get()
+                        if msg['results'] is not None:
                             reactant_sets.update(
                                 frozenset(smis) for smis in msg['results'])
 
@@ -66,8 +75,8 @@ def populate(task_queue, done_queue, smiles, transforms, depth=2):
                         graph.add_edge(rxn_no, chem_smi)
                         next_nodes.update((smi, rxn_no) for smi in reactants)
 
-            # Update outgoing edges if there is a successor (a reaction
-            # which uses it as a reactant).
+            # Finally, update outgoing edges if there is a successor
+            # (a reaction which uses the chemical as a reactant).
             if rxn_id is not None:
                 graph.add_edge(chem_smi, rxn_id)
 

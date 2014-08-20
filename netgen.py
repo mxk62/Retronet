@@ -32,21 +32,24 @@ def main():
     start = time.clock()
     client = pymongo.MongoClient()
     db = client[args.database]
-
     transforms = get_transforms(db, args.collection,
                                 popularity=args.popularity)
     eta = time.clock() - start
     logging.info('%d transforms acquired in %f s.' % (len(transforms), eta))
 
+    # Initialize share states allowing to exchange data between
+    # processes.
     #
-    task_queue, done_queue = multiprocessing.Queue(), multiprocessing.Queue()
+    # In ZMQ terms, see: http://zguide.zeromq.org/page:all#Divide-and-Conquer,
+    # these are the ventilator and the sink respectively.
+    tasks, results = multiprocessing.Queue(), multiprocessing.Queue()
 
-    # Create pool of workers to distribute tasks.
+    # Create pool of workers.
     pool_size = multiprocessing.cpu_count()
     for num in range(pool_size):
         w = multiprocessing.Process(
             target=rn.worker,
-            args=(num, task_queue, done_queue, transforms)
+            args=(num, tasks, results, transforms)
         )
         w.start()
 
@@ -55,12 +58,11 @@ def main():
     with open(args.file) as f:
         smiles = [line.strip() for line in f.readlines()]
 
-    # Build the network, either using existing reaction database or by applying
-    # retrosynthetic transforms.
+    # Build the retrosynthetic network, for each provided chemical.
     for idx, smi in enumerate(smiles):
         # Time each build individually.
         start = time.time()
-        network = rn.populate(task_queue, done_queue, smi, transforms,
+        network = rn.populate(tasks, results, smi, transforms,
                               depth=args.depth)
         eta = time.time() - start
         logging.info('Finished building for %s in %f s.' % (smi, eta))
@@ -74,42 +76,44 @@ def main():
         # Write graph for debugging purposes
         #networkx.write_gexf(network, 'testgraph.gexf')
 
-        # Discard current network entirely.
+        # Discard current network.
         network.clear()
     logging.info('All builds finished.')
 
     # Terminate workers.
     for i in range(pool_size):
-        task_queue.put('STOP')
+        results.put('STOP')
 
 
 def get_transforms(db, collection, popularity=5):
-    """Acquires transforms from an external data file.
+    """Acquires transforms from a given database.
 
     Parameters
     ----------
-    db : mongodb
-        Name of a mongodb.
-    collection : mongodb collection
+    db : pymongo's Database
+        Name of a mongodb storing retrosynthetic transforms.
+    collection : pymongo's Collection
         Collection containing retrosynthetic transforms.
     popularity : integer
-        Popularity threshold, i.e. the minimal number of reaction a
+        Popularity threshold, i.e. the minimal number of reactions a
         transform can be applied to. Transforms below the threshold are
         ignored. Defaults to 5.
 
     Returns
     -------
-    transforms : list of Transforms
-        A list of transforms.
+    transforms : dictionary
+        A dictionary storing available transforms. Its key represents
+        transform ids and values transforms themselves.
     """
     transforms = {}
     for rec in db[collection].find({'expert': True}):
+        if 'popularity' in rec and rec['populairty'] < popularity:
+            continue
+
+        # Acquire list of byproducts which can be supplied automatically.
         byproducts = None
         if 'product_smiles' in rec:
             byproducts = [s.encode('ascii') for s in rec['product_smiles']]
-
-        if 'popularity' in rec and rec['populairty'] < popularity:
-            continue
 
         try:
             t = rn.Transform(rec['reaction_smarts'].encode('ascii'),
@@ -117,8 +121,8 @@ def get_transforms(db, collection, popularity=5):
         except (KeyError, ValueError):
             continue
 
-        # Some transforms has to many byproducts listed (e.g. 87), filter
-        # them out.
+        # Some transforms has to many byproducts listed in the database (e.g.
+        # 87), filter them out.
         nb = len(t.byproducts) if t.byproducts is not None else 0
         if nb == len(t.retrons) - 1:
             transforms[t.id] = t
@@ -127,4 +131,3 @@ def get_transforms(db, collection, popularity=5):
 
 if __name__ == '__main__':
     main()
-
