@@ -33,7 +33,7 @@ def populate(tasks, results, smiles, transforms, depth=2):
     """
 
     # Divide available transforms into batches.
-    batch_size = 3000
+    batch_size = 100
     batches = partition(transforms.keys(), batch_size)
 
     # Initialize graph representing the network.
