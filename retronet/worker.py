@@ -1,6 +1,10 @@
 """Retrosynthetic worker
 """
+import logging
 from retronet import Chemical
+
+
+logger = logging.getLogger(__name__)
 
 
 def worker(num, tasks, results, transforms):
@@ -39,13 +43,15 @@ def worker(num, tasks, results, transforms):
 
         chem = Chemical(smi)
 
+        logging.debug(
+            'Worker-%d: applying %d transform to %s' % (num, len(ids), smi)
+        )
         reactant_sets = []
         for i in ids:
-            #print 'Worker-%d: applying transform %d to %s' % (
-            #    num, i, chem.smiles)
             reactant_sets.extend(chem.make_retrostep(transforms[i]))
 
         # Send back the results.
-        #print 'Worker-%d: sending back %d results.' % (
-        #    num, len(reactant_sets))
+        logging.debug(
+            'Worker-%d: sending back %d results.' % (num, len(reactant_sets))
+        )
         results.put({'results': reactant_sets if reactant_sets else None})
