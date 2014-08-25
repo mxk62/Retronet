@@ -11,12 +11,13 @@ on your system:
 
 *	[RDKit](http://www.rdkit.org): open source toolkit for chemoinformatics;
 *	[NetworkX](https://networkx.github.io): high-productivity software for
-	complex networks.
+	complex networks;
+*	[pymongo](https://pypi.python.org/pypi/pymongo/): Python driver to
+	[MongoDb](http://www.mongodb.org).
 
 Also, retrosynthetic transforms, encoded in
 [Daylight's](http://www.daylight.com/) SMARTS notation, must be stored as a
-[mongodb](http://www.mongodb.org/) collection in a location accessible from
-your box.
+MongoDB collection in a location accessible from your box.
 
 The detailed description of a transform database entry, using
 [JSON-schema](http://json-schema.org/), can be found in `transform.json`.
