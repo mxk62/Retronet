@@ -19,7 +19,7 @@ def main():
     rec_count = itertools.count(start=1)
     records = []
     transforms = get_transforms(args.filename)
-    for rxn_smarts, rxns in transforms:
+    for rxn_smarts, rxns in transforms.items():
         retro_smarts = reverse_smarts(rxn_smarts)
         try:
             rxn = AllChem.ReactionFromSmarts(retro_smarts)
