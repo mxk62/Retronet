@@ -21,9 +21,11 @@ def main():
     transforms = get_transforms(args.filename)
     for rxn_smarts, rxns in transforms.items():
         retro_smarts = reverse_smarts(rxn_smarts)
+
+        # Verify if a SMARTS is valid, ignore it if not.
         try:
             rxn = AllChem.ReactionFromSmarts(retro_smarts)
-        except RuntimeError:
+        except (RuntimeError, ValueError):
             continue
 
         rec = make_record(retro_smarts, popularity=len(rxns))
