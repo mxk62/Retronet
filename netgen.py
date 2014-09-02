@@ -116,7 +116,7 @@ def get_transforms(db, collection, popularity=5):
     """
     transforms = {}
     for rec in db[collection].find({'expert': True}):
-        if 'popularity' in rec and rec['populairty'] < popularity:
+        if 'popularity' in rec and rec['popularity'] < popularity:
             continue
 
         # Acquire list of byproducts which can be supplied automatically.
