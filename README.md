@@ -20,7 +20,7 @@ Also, retrosynthetic transforms, encoded in
 MongoDB collection in a location accessible from your box.
 
 The detailed description of a transform database entry, using
-[JSON-schema](http://json-schema.org/), can be found in `transform.json`.
+[JSON-schema](http://json-schema.org/), can be found in `utils/schema.py`.
 
 
 ## Usage
