@@ -4,7 +4,7 @@ import jsonschema
 import pickle
 from pymongo import MongoClient
 from rdkit.Chem import AllChem
-from utils.schema import SCHEMA
+from schema import SCHEMA
 
 
 def main():
